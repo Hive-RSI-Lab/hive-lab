@@ -1,0 +1,11 @@
+torch
+transformers>=5.5
+huggingface_hub
+accelerate
+datasets
+scikit-learn
+numpy
+scipy
+matplotlib
+pytest
+jlens @ git+https://github.com/anthropics/jacobian-lens

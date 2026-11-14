@@ -1,0 +1,1 @@
+{"name": "lab", "description": "Workbench for quick experiments on small open language models (lenses, probes, steering, ablation, activation patching), each with its control built in; plus askbench (behavioural tests on a Claude model) and npedia (a Neuronpedia client).", "kind": "tool", "bin": {"lab": "lab.py", "askbench": "askbench.py", "npedia": "npedia.py"}}
