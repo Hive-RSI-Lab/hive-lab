@@ -96,3 +96,33 @@ def test_lab_home_puts_everything_in_one_folder(tmp_path, monkeypatch):
     monkeypatch.setenv("LAB_VENV", str(tmp_path / "elsewhere"))
     lab.resolve_paths()
     assert lab.VENV == tmp_path / "elsewhere"  # a variable that is set wins
+
+
+# hive-lab #1: --check warns when a proxy is set and Modal's proxy packages are missing.
+# Kept in this file so CI runs it without a workflow change; modal is not imported.
+import importlib.util  # noqa: E402
+import pathlib  # noqa: E402
+
+_spec = importlib.util.spec_from_file_location(
+    "proxycheck", pathlib.Path(__file__).resolve().parent.parent / "modal" / "proxycheck.py")
+proxycheck = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(proxycheck)
+warn = proxycheck.proxy_warning
+
+
+def test_no_proxy_no_warning():
+    assert warn({}, lambda m: False) is None
+
+
+def test_proxy_with_packages_no_warning():
+    assert warn({"HTTPS_PROXY": "http://127.0.0.1:3128"}, lambda m: True) is None
+
+
+def test_proxy_missing_packages_warns_with_the_fix():
+    w = warn({"https_proxy": "http://127.0.0.1:3128"}, lambda m: m == "aiohttp_socks")
+    assert w and "https_proxy" in w and "python_socks" in w and "aiohttp_socks" not in w.split("but")[1].split("is not")[0]
+    assert "modal[api-proxy-support]" in w
+
+
+def test_empty_proxy_variable_ignored():
+    assert warn({"HTTPS_PROXY": ""}, lambda m: False) is None
