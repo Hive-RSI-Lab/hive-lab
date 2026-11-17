@@ -29,7 +29,8 @@ Nothing has been run on Modal itself.
    adds `python-socks` and `aiohttp-socks`, which the client needs to go through a proxy (as
    inside a Hive's sandbox, where all traffic leaves through `HTTPS_PROXY`); without them every
    command fails with "Could not connect to the Modal server". It is harmless with no proxy.
-   `python modal/run_remote.py --check` says if they are missing while a proxy is set.
+   `python modal/run_remote.py --check` says if they are missing while a proxy is set, and then
+   exits 1.
 3. Sign in: `modal setup` (opens a browser), or `modal token new`. Where no browser can open
    (a sandbox, a server), run `modal token new` in the background: it prints a link and waits
    until it is approved, so open the link on your own computer. Both write a token file,

@@ -110,19 +110,46 @@ _spec.loader.exec_module(proxycheck)
 warn = proxycheck.proxy_warning
 
 
+P = "http://127.0.0.1:3128"
+
+
 def test_no_proxy_no_warning():
     assert warn({}, lambda m: False) is None
 
 
 def test_proxy_with_packages_no_warning():
-    assert warn({"HTTPS_PROXY": "http://127.0.0.1:3128"}, lambda m: True) is None
+    assert warn({"HTTPS_PROXY": P}, lambda m: True) is None
 
 
 def test_proxy_missing_packages_warns_with_the_fix():
-    w = warn({"https_proxy": "http://127.0.0.1:3128"}, lambda m: m == "aiohttp_socks")
-    assert w and "https_proxy" in w and "python_socks" in w and "aiohttp_socks" not in w.split("but")[1].split("is not")[0]
-    assert "modal[api-proxy-support]" in w
+    w = warn({"https_proxy": P}, lambda m: m == "aiohttp_socks")
+    assert w.startswith("proxy: https_proxy is set") and "python-socks is not installed" in w
+    assert "aiohttp-socks" not in w and "modal[api-proxy-support]" in w and P not in w
+
+
+def test_all_proxy_counts():
+    assert "python-socks and aiohttp-socks are" in warn({"ALL_PROXY": P}, lambda m: False)
 
 
 def test_empty_proxy_variable_ignored():
     assert warn({"HTTPS_PROXY": ""}, lambda m: False) is None
+
+
+def test_lowercase_empty_wins_over_uppercase():
+    assert warn({"HTTPS_PROXY": P, "https_proxy": ""}, lambda m: False) is None
+
+
+def test_http_proxy_alone_is_not_used_for_modal():
+    # modal reaches its API over TLS, so only https_proxy / all_proxy apply
+    assert warn({"HTTP_PROXY": P, "http_proxy": P}, lambda m: False) is None
+
+
+def test_no_proxy_for_modal_still_needs_aiohttp_socks():
+    # NO_PROXY spares the gRPC channel, but modal's HTTPS session ignores it
+    w = warn({"HTTPS_PROXY": P, "NO_PROXY": ".modal.com"}, lambda m: False)
+    assert "aiohttp-socks is not installed" in w and "python-socks" not in w
+
+
+def test_modal_disable_api_proxy():
+    assert warn({"HTTPS_PROXY": P, "MODAL_DISABLE_API_PROXY": "1"}, lambda m: False) is None
+    assert warn({"HTTPS_PROXY": P, "MODAL_DISABLE_API_PROXY": "false"}, lambda m: False) is not None
