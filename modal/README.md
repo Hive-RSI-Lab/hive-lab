@@ -25,8 +25,15 @@ Nothing has been run on Modal itself.
 ## Account steps
 
 1. Sign up at <https://modal.com/signup> (offers GitHub, Google or SSO sign-in).
-2. Install the client locally: `pip install modal` (into a venv).
-3. Sign in: `modal setup` (opens a browser), or `modal token new`. Both write a token file,
+2. Install the client locally, into a venv: `pip install 'modal[api-proxy-support]'`. The extra
+   adds `python-socks` and `aiohttp-socks`, which the client needs to go through a proxy (as
+   inside a Hive's sandbox, where all traffic leaves through `HTTPS_PROXY`); without them every
+   command fails with "Could not connect to the Modal server". It is harmless with no proxy.
+   `python modal/run_remote.py --check` says if they are missing while a proxy is set, and then
+   exits 1.
+3. Sign in: `modal setup` (opens a browser), or `modal token new`. Where no browser can open
+   (a sandbox, a server), run `modal token new` in the background: it prints a link and waits
+   until it is approved, so open the link on your own computer. Both write a token file,
    `~/.modal.toml`. **That file is a credential: never print it, copy it, paste it into a chat
    or commit it.** The same applies to `MODAL_TOKEN_ID` / `MODAL_TOKEN_SECRET` if you use them.
 4. Set a spending limit before the first GPU run (see below).

@@ -158,7 +158,10 @@ def offline_check() -> int:
         assert got == ["./result.json", "./sub/log.txt"], got
         assert not os.path.exists(os.path.join(d, "escape.txt"))
     print("copy-back extraction OK (path escape skipped)")
-    return 0
+    from proxycheck import proxy_warning  # modal/ is sys.path[0] when this file is run
+    w = proxy_warning()
+    print(w or "proxy: none set, or the proxy packages are installed")
+    return 1 if w else 0
 
 
 if __name__ == "__main__":
