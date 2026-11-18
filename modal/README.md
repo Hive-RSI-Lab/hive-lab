@@ -36,6 +36,8 @@ Nothing has been run on Modal itself.
    until it is approved, so open the link on your own computer. Both write a token file,
    `~/.modal.toml`. **That file is a credential: never print it, copy it, paste it into a chat
    or commit it.** The same applies to `MODAL_TOKEN_ID` / `MODAL_TOKEN_SECRET` if you use them.
+   In a sandboxed Hive, an agent cannot open a token saved under Settings > Secrets, so pasting
+   the Modal token there does not sign the sandbox in: sign in from inside it, as above.
 4. Set a spending limit before the first GPU run (see below).
 
 ## How to run
