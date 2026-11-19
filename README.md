@@ -103,6 +103,8 @@ All snippets start with:
 import lablib
 from lablib import acts, data, probe, steer, ablate, lens, patch, stats, report
 m = lablib.load()            # or lablib.load("gpt2")
+# lablib.load("pythia-70m", revision="step1000")  # a published training checkpoint
+# lablib.load("pythia-70m", random_seed=0)        # same shape, random weights from a seed
 ```
 
 **Lens** (`examples/lens_compare.py`). It reads the residual through the logit lens and the Jacobian lens.

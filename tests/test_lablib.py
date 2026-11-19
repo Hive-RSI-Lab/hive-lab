@@ -376,3 +376,68 @@ def test_report_run_dir(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     p = report.run_dir("my run").path
     assert p.parent == tmp_path / "lab-runs" and p.name.endswith("-my-run")
+
+
+# ------------------------------------------------- checkpoints and random weights
+def _tiny_gpt2_dir(tmp_path):
+    """A tiny local GPT-2 (config + tokenizer from the cached gpt2) so tests need no big download."""
+    import transformers
+
+    tok = transformers.AutoTokenizer.from_pretrained("gpt2")
+    cfg = transformers.AutoConfig.from_pretrained("gpt2")
+    cfg.n_layer, cfg.n_head, cfg.n_embd, cfg.n_positions = 2, 2, 16, 64
+    transformers.AutoModelForCausalLM.from_config(cfg).save_pretrained(tmp_path)
+    tok.save_pretrained(tmp_path)
+    return str(tmp_path)
+
+
+def _next_word_scores(model, prompt="The capital of France is"):
+    import torch
+
+    enc = model.tok(prompt, return_tensors="pt")
+    with torch.no_grad():
+        return model.hf(**enc).logits[0, -1].float().cpu()
+
+
+def test_random_seed_is_reproducible(tmp_path):
+    import lablib
+    import torch
+
+    d = _tiny_gpt2_dir(tmp_path)
+    a = lablib.load(d, device="cpu", verbose=False, random_seed=0)
+    b = lablib.load(d, device="cpu", verbose=False, random_seed=0)
+    c = lablib.load(d, device="cpu", verbose=False, random_seed=1)
+    assert a.seed == 0 and "random seed=0" in repr(a)
+    sa, sb, sc = _next_word_scores(a), _next_word_scores(b), _next_word_scores(c)
+    assert torch.equal(sa, sb)
+    assert not torch.allclose(sa, sc)
+
+
+def test_revision_and_seed_exclusive_and_keyed(tmp_path):
+    import lablib
+    from lablib import acts
+
+    d = _tiny_gpt2_dir(tmp_path)
+    with pytest.raises(ValueError):
+        lablib.load(d, device="cpu", verbose=False, revision="step1", random_seed=0)
+    a = lablib.load(d, device="cpu", verbose=False, random_seed=0)
+    b = lablib.load(d, device="cpu", verbose=False, random_seed=1)
+    c = lablib.load(d, device="cpu", verbose=False)
+    keys = {acts._key(x, ["hi"], [0], "last") for x in (a, b, c)}
+    assert len(keys) == 3  # cached activations never collide across seeds or the trained model
+    c.revision = "step1000"
+    assert acts._key(c, ["hi"], [0], "last") not in keys
+
+
+def test_pythia_layout_loads_with_random_weights(tmp_path):
+    """GPT-NeoX (Pythia) loads through lab.load even where jlens's own layout misses the lm_head name."""
+    import transformers
+
+    import lablib
+
+    cfg = transformers.GPTNeoXConfig(hidden_size=16, num_hidden_layers=2, num_attention_heads=2,
+                                     intermediate_size=32, vocab_size=50304, max_position_embeddings=64)
+    transformers.AutoModelForCausalLM.from_config(cfg).save_pretrained(tmp_path)
+    transformers.AutoTokenizer.from_pretrained("gpt2").save_pretrained(tmp_path)
+    m = lablib.load(str(tmp_path), device="cpu", verbose=False, random_seed=3)
+    assert m.n_layers == 2 and m.d_model == 16 and m.seed == 3

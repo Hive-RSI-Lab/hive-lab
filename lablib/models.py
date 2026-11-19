@@ -124,13 +124,17 @@ class Model:
     device: str
     dtype: object
     device_reason: str
+    revision: str | None = None  # Hub revision (e.g. Pythia "step1000"); None = main
+    seed: int | None = None  # set when the weights are random, built from this seed
 
     @property
     def layers(self):
         return self.lm.layers
 
     def __repr__(self):
-        return (f"Model({self.name}, n_layers={self.n_layers}, d_model={self.d_model}, "
+        extra = (f", revision={self.revision}" if self.revision else "") + \
+                (f", random seed={self.seed}" if self.seed is not None else "")
+        return (f"Model({self.name}{extra}, n_layers={self.n_layers}, d_model={self.d_model}, "
                 f"device={self.device}, dtype={self.dtype})")
 
     # --- tokenising -------------------------------------------------------
@@ -212,14 +216,24 @@ class Model:
 
 
 def load(name: str = DEFAULT, device: str = "auto", dtype: str = "auto",
-         verbose: bool = True) -> Model:
+         verbose: bool = True, revision: str | None = None,
+         random_seed: int | None = None) -> Model:
     """Load a model for text-only causal-LM use.
 
     device: "auto" | "cpu" | "cuda". dtype: "auto" (float32 on CPU, bfloat16
     on CUDA) | "float32" | "bfloat16" | "float16".
     Qwen3.5 checkpoints are vision-language; AutoModelForCausalLM loads only
     the text decoder (Qwen3_5ForCausalLM), as the jlens walkthrough does.
+
+    revision: load a published training checkpoint, a Hub revision such as
+    Pythia's "step1000" (EleutherAI/pythia-* have step0 ... step143000).
+    random_seed: build the same architecture with freshly initialised weights
+    (config only, nothing downloaded but the config and tokenizer) after
+    torch.manual_seed(random_seed): the same seed gives the same weights.
+    The two cannot be combined.
     """
+    if revision is not None and random_seed is not None:
+        raise ValueError("load(): give revision (a checkpoint) or random_seed (random weights), not both")
     import torch
     import transformers
 
@@ -239,14 +253,34 @@ def load(name: str = DEFAULT, device: str = "auto", dtype: str = "auto",
     if verbose:
         print(f"[lab] loading {name} on {dev} ({reason}), dtype {str(tdtype).replace('torch.', '')}",
               flush=True)
-    hf = transformers.AutoModelForCausalLM.from_pretrained(name, dtype=tdtype)
+    if random_seed is not None:
+        cfg = transformers.AutoConfig.from_pretrained(name)
+        torch.manual_seed(random_seed)
+        hf = transformers.AutoModelForCausalLM.from_config(cfg, dtype=tdtype)
+        if verbose:
+            print(f"[lab] random weights, seed {random_seed} (no trained weights loaded)", flush=True)
+    else:
+        kw = {"revision": revision} if revision else {}
+        if revision and verbose:
+            print(f"[lab] checkpoint revision {revision}", flush=True)
+        hf = transformers.AutoModelForCausalLM.from_pretrained(name, dtype=tdtype, **kw)
     hf.to(dev)
     tok = transformers.AutoTokenizer.from_pretrained(name)
     if tok.pad_token_id is None:
         tok.pad_token = tok.eos_token
-    lm = jlens.from_hf(hf, tok)  # sets eval(), requires_grad False, BOS like the lens fit
+    try:
+        lm = jlens.from_hf(hf, tok)  # sets eval(), requires_grad False, BOS like the lens fit
+    except ValueError:
+        if not hasattr(hf, "gpt_neox"):
+            raise
+        # Pythia: newer transformers name the unembedding lm_head, jlens's built-in layout says embed_out
+        from jlens.hf import Layout
+
+        lm = jlens.from_hf(hf, tok, layout=Layout("gpt_neox", norm="final_layer_norm",
+                                                  embed="embed_in", lm_head="lm_head"))
     return Model(hf=hf, tok=tok, lm=lm, name=name, n_layers=lm.n_layers,
-                 d_model=lm.d_model, device=dev, dtype=tdtype, device_reason=reason)
+                 d_model=lm.d_model, device=dev, dtype=tdtype, device_reason=reason,
+                 revision=revision, seed=random_seed)
 
 
 @contextmanager

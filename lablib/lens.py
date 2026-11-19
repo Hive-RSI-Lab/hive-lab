@@ -57,11 +57,16 @@ def get_lens(model, n_fit: int = 16, allow_fit: bool = True):
     from huggingface_hub import hf_hub_download
 
     spec = KNOWN.get(model.name, {})
+    tag = ""
+    if getattr(model, "revision", None) or getattr(model, "seed", None) is not None:
+        # the published lens was fitted on the final weights: not valid for a checkpoint or random weights
+        spec = {}
+        tag = (f"@{model.revision}" if model.revision else f"@random{model.seed}")
     if spec.get("lens"):
         path = hf_hub_download(LENS_REPO, spec["lens"], revision=LENS_REVISION)
         lens = jlens.JacobianLens.load(path)
         return lens, f"published lens {LENS_REPO}/{spec['lens']} (n_prompts={lens.n_prompts})"
-    cached = _lens_cache_dir() / f"{model.name.replace('/', '--')}-n{n_fit}.pt"
+    cached = _lens_cache_dir() / f"{model.name.replace('/', '--')}{tag.replace('@', '--')}-n{n_fit}.pt"
     if cached.exists():
         lens = jlens.JacobianLens.load(str(cached))
         return lens, f"SMALL-SAMPLE FIT (n={lens.n_prompts} prompts, cached {cached})"

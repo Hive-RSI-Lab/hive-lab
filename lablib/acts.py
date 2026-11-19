@@ -42,6 +42,7 @@ def _key(model, prompts, layers, position, max_length: int = 512) -> str:
     (None for a local folder), dtype, truncation length and the library versions."""
     revision = getattr(getattr(getattr(model, "hf", None), "config", None), "_commit_hash", None)
     blob = json.dumps({"v": ACTS_VERSION, "model": model.name, "revision": revision,
+                       "ckpt": getattr(model, "revision", None), "seed": getattr(model, "seed", None),
                        "dtype": str(model.dtype), "libs": _versions(), "max_length": max_length,
                        "prompts": list(prompts), "layers": list(layers),
                        "position": position}, sort_keys=True)
